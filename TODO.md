@@ -18,9 +18,9 @@
 ## Core Kernel Infrastructure
 
 ### CPU & Low-Level
-- [ ] Global Descriptor Table (GDT) setup
-- [ ] Interrupt Descriptor Table (IDT) setup
-- [ ] Interrupt Service Routines (ISRs) for CPU exceptions
+- [x] Global Descriptor Table (GDT) setup
+- [x] Interrupt Descriptor Table (IDT) setup
+- [x] Interrupt Service Routines (ISRs) for CPU exceptions
 - [ ] Interrupt Request (IRQ) handlers
 - [ ] Programmable Interrupt Controller (PIC) initialization
 - [ ] System timer (PIT) implementation
@@ -33,10 +33,10 @@
 - [ ] Parse multiboot memory map
 
 ### Input/Output
-- [ ] Serial port driver (for debugging)
+- [x] Serial port driver (for debugging) - EarlyConsole via COM1
 - [ ] Keyboard driver (PS/2)
 - [ ] Improved VGA driver (scrolling, colors, cursor)
-- [ ] Basic printf/logging infrastructure
+- [x] Basic printf/logging infrastructure - libclankercommon with writer interface
 
 ## System Calls & Process Management
 - [ ] System call interface
@@ -58,9 +58,16 @@
 - [ ] RTC (Real-Time Clock) driver
 - [ ] Mouse driver (PS/2)
 
-## Userspace
-- [ ] C standard library implementation (libclanker)
-- [ ] System call wrappers
+## Userspace Libraries
+
+### Core Libraries
+- [x] Common library (libclankercommon) - printf, writer interface, shared utilities
+- [ ] Kernel library (libclankerk) - kernel-specific utilities and data structures
+- [ ] Native system API (libclanker) - ClankerOS native API and system call wrappers
+- [ ] C standard library (libc) - ANSI C standard library implementation
+- [ ] POSIX compatibility (libposix) - POSIX API layer on top of libclanker
+
+### Applications
 - [ ] Basic shell
 - [ ] Essential utilities (ls, cat, echo, etc.)
 
@@ -95,12 +102,20 @@
 
 ## Current Status
 
-**Milestone 1: Boot & Basic Output** ✅ COMPLETE
+**Milestone 1: Boot & Basic Output** ✅ COMPLETE (Session 1)
 - Successfully boots via Multiboot
 - VGA text output working
 - Build system functional
 
-**Next Milestone: Core Infrastructure**
-- GDT/IDT setup
-- Interrupt handling
-- Memory management basics
+**Milestone 2: Printf & Core Infrastructure** ✅ COMPLETE (Session 2)
+- GDT/IDT/ISR setup complete
+- Generic printf library (libclankercommon) with writer interface
+- Early console (COM1 serial) for debugging
+- Formatted kernel output with hex display
+- Code organization improvements (clc/ namespace)
+
+**Next Milestone: Interrupts & Timing**
+- IRQ handler infrastructure (interrupts 32-47)
+- PIC initialization (8259 chip)
+- PIT timer setup
+- Keyboard interrupt handling
