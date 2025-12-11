@@ -23,11 +23,16 @@ OBJECTS = $(ASM_OBJECTS) $(C_OBJECTS)
 # Get GCC's built-in include directory for freestanding headers
 GCC_INCLUDE := $(shell $(CC) -print-file-name=include)
 
+# Library paths
+LIBCLANKERCOMMON_DIR = ../libraries/libclankercommon
+LIBCLANKERCOMMON = $(LIBCLANKERCOMMON_DIR)/libclankercommon.a
+
 # Flags
 CFLAGS = -std=c11 -ffreestanding -O2 -Wall -Wextra -Wpedantic
 CFLAGS += -nostdlib -fno-builtin -fno-stack-protector
-CFLAGS += -I$(INCLUDE_DIR) -I$(GCC_INCLUDE)
+CFLAGS += -I$(INCLUDE_DIR) -I$(GCC_INCLUDE) -I$(LIBCLANKERCOMMON_DIR)/include
 CFLAGS += -m32
+CFLAGS += -g
 
 ASFLAGS = --32
 
@@ -37,8 +42,8 @@ LDFLAGS = -T $(ARCH_DIR)/linker.ld -nostdlib -m elf_i386
 all: $(TARGET)
 
 # Link kernel
-$(TARGET): $(OBJECTS)
-	$(LD) $(LDFLAGS) -o $@ $^
+$(TARGET): $(OBJECTS) $(LIBCLANKERCOMMON)
+	$(LD) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBCLANKERCOMMON)
 
 # Compile C sources
 %.o: %.c

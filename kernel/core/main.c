@@ -3,6 +3,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "multiboot.h"
+#include "gdt.h"
+#include "idt.h"
+#include "isr.h"
+#include "early_console.h"
+#include "clc/printf.h"
+#include "vid_writer.h"
 
 /* VGA text mode buffer */
 #define VGA_MEMORY 0xB8000
@@ -29,83 +35,129 @@ enum vga_color {
     VGA_COLOR_WHITE = 15,
 };
 
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg)
-{
-    return fg | bg << 4;
-}
+/* Terminal state */
+static size_t terminalRow;
+static size_t terminalColumn;
+static uint8_t terminalColor;
+static uint16_t* terminalBuffer;
 
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color)
-{
-    return (uint16_t) uc | (uint16_t) color << 8;
-}
+/* Private function declarations */
+static inline uint8_t vgaEntryColor(enum vga_color fg, enum vga_color bg);
+static inline uint16_t vgaEntry(unsigned char uc, uint8_t color);
 
-/* Simple terminal state */
-static size_t terminal_row;
-static size_t terminal_column;
-static uint8_t terminal_color;
-static uint16_t* terminal_buffer;
-
-void terminal_initialize(void)
+/*
+ * VidInitialize - Initialize VGA text mode display
+ */
+void VidInitialize(void)
 {
-    terminal_row = 0;
-    terminal_column = 0;
-    terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
-    terminal_buffer = (uint16_t*) VGA_MEMORY;
+    terminalRow = 0;
+    terminalColumn = 0;
+    terminalColor = vgaEntryColor(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    terminalBuffer = (uint16_t*)VGA_MEMORY;
 
     for (size_t y = 0; y < VGA_HEIGHT; y++) {
         for (size_t x = 0; x < VGA_WIDTH; x++) {
             const size_t index = y * VGA_WIDTH + x;
-            terminal_buffer[index] = vga_entry(' ', terminal_color);
+            terminalBuffer[index] = vgaEntry(' ', terminalColor);
         }
     }
 }
 
-void terminal_putchar(char c)
+/*
+ * VidPutChar - Write a single character to the display
+ */
+void VidPutChar(char c)
 {
     if (c == '\n') {
-        terminal_column = 0;
-        terminal_row++;
+        terminalColumn = 0;
+        terminalRow++;
         return;
     }
 
-    const size_t index = terminal_row * VGA_WIDTH + terminal_column;
-    terminal_buffer[index] = vga_entry(c, terminal_color);
+    const size_t index = terminalRow * VGA_WIDTH + terminalColumn;
+    terminalBuffer[index] = vgaEntry(c, terminalColor);
 
-    if (++terminal_column == VGA_WIDTH) {
-        terminal_column = 0;
-        if (++terminal_row == VGA_HEIGHT) {
-            terminal_row = 0;
+    if (++terminalColumn == VGA_WIDTH) {
+        terminalColumn = 0;
+        if (++terminalRow == VGA_HEIGHT) {
+            terminalRow = 0;
         }
     }
 }
 
-void terminal_writestring(const char* data)
+/*
+ * VidWriteString - Write a null-terminated string to the display
+ */
+void VidWriteString(const char* data)
 {
     size_t i = 0;
     while (data[i]) {
-        terminal_putchar(data[i]);
+        VidPutChar(data[i]);
         i++;
     }
 }
 
-/* Kernel main entry point */
-void kernel_main(uint32_t magic, multiboot_info_t* mboot_info)
+/*
+ * KMain - Kernel entry point
+ *
+ * Called by boot.s after stack setup with multiboot information
+ */
+void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
 {
-    /* Avoid unused parameter warnings */
-    (void)magic;
-    (void)mboot_info;
+    // Initialize early console first for debugging
+    EConInitialize();
 
-    /* Initialize terminal */
-    terminal_initialize();
+    // Initialize terminal
+    VidInitialize();
 
-    /* Print welcome message */
-    terminal_writestring("ClankerOS v0.1.0\n");
-    terminal_writestring("Booting kernel...\n");
-    terminal_writestring("\n");
-    terminal_writestring("Welcome to ClankerOS!\n");
+    // Get VGA writer for formatted output
+    ClcWriter* vgaWriter = VidGetWriter();
 
-    /* Halt - we'll add more functionality later */
+    ClcPrintfWriter(vgaWriter, "ClankerOS v0.1.0\n");
+    ClcPrintfWriter(vgaWriter, "Booting kernel...\n\n");
+
+    // Initialize GDT
+    ClcPrintfWriter(vgaWriter, "Initializing GDT... ");
+    GdtInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Initialize IDT
+    ClcPrintfWriter(vgaWriter, "Initializing IDT... ");
+    IdtInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Initialize ISRs
+    ClcPrintfWriter(vgaWriter, "Initializing ISRs... ");
+    IsrInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // TODO: Set up PIC before enabling interrupts
+    // ClcPrintfWriter(vgaWriter, "Enabling interrupts... ");
+    // __asm__ volatile ("sti");
+    // ClcPrintfWriter(vgaWriter, "OK\n");
+
+    ClcPrintfWriter(vgaWriter, "\nWelcome to ClankerOS!\n");
+    ClcPrintfWriter(vgaWriter, "Kernel initialized successfully.\n");
+    ClcPrintfWriter(vgaWriter, "Interrupts disabled (PIC not yet configured).\n");
+
+    // Test formatted output
+    ClcPrintfWriter(vgaWriter, "\nMultiboot magic: 0x%x\n", magic);
+    ClcPrintfWriter(vgaWriter, "Multiboot info at: %p\n", mbootInfo);
+
+    // Halt - we'll add more functionality later
     while (1) {
         __asm__ volatile ("hlt");
     }
+}
+
+/* Private function implementations */
+
+static inline uint8_t vgaEntryColor(enum vga_color fg, enum vga_color bg)
+{
+    return fg | bg << 4;
+}
+
+static inline uint16_t vgaEntry(unsigned char uc, uint8_t color)
+{
+    return (uint16_t)uc | (uint16_t)color << 8;
 }
