@@ -7,15 +7,10 @@ SECTIONS
     /* Kernel starts at 1MB physical address */
     . = 1M;
 
-    /* Multiboot header must be in first 8KB */
-    .multiboot :
-    {
-        *(.multiboot)
-    }
-
-    /* Text (code) section */
+    /* Text (code) section - multiboot header must be at the start */
     .text ALIGN(4K) :
     {
+        *(.multiboot)
         *(.text)
     }
 

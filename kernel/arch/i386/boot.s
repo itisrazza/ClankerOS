@@ -33,9 +33,9 @@ _start:
     push %eax
 
     /* Call kernel main function */
-    call kernel_main
+    call KMain
 
-    /* If kernel_main returns, halt */
+    /* If KMain returns, halt */
     cli
 1:  hlt
     jmp 1b
