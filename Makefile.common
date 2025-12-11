@@ -1,0 +1,63 @@
+# ClankerOS Common Makefile Configuration
+# Include this file in all Makefiles to get consistent toolchain setup
+
+# Determine project root directory
+# Each Makefile should define MAKEFILE_DIR relative to itself
+ifndef MAKEFILE_DIR
+    MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+endif
+
+# Find project root by looking for the root Makefile
+PROJECT_ROOT := $(shell dirname $(MAKEFILE_DIR))
+ifeq ($(wildcard $(PROJECT_ROOT)/Makefile.common),)
+    PROJECT_ROOT := $(shell dirname $(shell dirname $(MAKEFILE_DIR)))
+endif
+ifeq ($(wildcard $(PROJECT_ROOT)/Makefile.common),)
+    PROJECT_ROOT := $(MAKEFILE_DIR)
+endif
+
+# Determine toolchain path
+# Priority: CLANKEROS_TOOLCHAIN env var > local toolchain/ > system PATH
+ifdef CLANKEROS_TOOLCHAIN
+    TOOLCHAIN_DIR := $(CLANKEROS_TOOLCHAIN)
+else
+    TOOLCHAIN_DIR := $(PROJECT_ROOT)/toolchain
+endif
+
+# Target configuration
+TARGET := i386-elf
+TARGET_PREFIX := $(TARGET)-
+
+# Check if toolchain exists in our local directory
+TOOLCHAIN_EXISTS := $(wildcard $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)gcc)
+
+# Set toolchain binaries
+ifneq ($(TOOLCHAIN_EXISTS),)
+    # Use local toolchain
+    CC := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)gcc
+    CXX := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)g++
+    AS := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)as
+    LD := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)ld
+    AR := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)ar
+    OBJCOPY := $(TOOLCHAIN_DIR)/bin/$(TARGET_PREFIX)objcopy
+else
+    # Fall back to system PATH (allows using system cross-compiler)
+    CC := $(TARGET_PREFIX)gcc
+    CXX := $(TARGET_PREFIX)g++
+    AS := $(TARGET_PREFIX)as
+    LD := $(TARGET_PREFIX)ld
+    AR := $(TARGET_PREFIX)ar
+    OBJCOPY := $(TARGET_PREFIX)objcopy
+endif
+
+# Export for sub-makes
+export PROJECT_ROOT
+export TOOLCHAIN_DIR
+export TARGET
+export TARGET_PREFIX
+export CC
+export CXX
+export AS
+export LD
+export AR
+export OBJCOPY

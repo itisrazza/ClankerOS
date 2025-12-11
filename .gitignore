@@ -1,0 +1,77 @@
+# ClankerOS .gitignore
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.bin
+*.elf
+*.iso
+*.img
+
+# Kernel binary
+kernel/clankeros.bin
+
+# Compiled programs
+programs/*/hello
+programs/*/test
+programs/*/*.out
+
+# Libraries
+libraries/**/*.a
+libraries/**/*.so
+
+# Toolchain (too large to commit)
+toolchain/
+/toolchain/*
+
+# Build directories
+build/
+obj/
+bin/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.*.swp
+.*.swo
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.sublime-*
+.DS_Store
+
+# GDB files
+.gdb_history
+gdbinit.local
+
+# QEMU files
+qemu.log
+
+# Dependency files
+*.d
+
+# Core dumps (but not kernel/core/ directory)
+/core
+core.*
+
+# Python bytecode (for scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Downloaded toolchain sources (optional - uncomment to exclude)
+# scripts/binutils-*.tar.*
+# scripts/gcc-*.tar.*
+
+# Test/debug output
+*.log
+test_output/
+
+# Backup files
+*.bak
+*.backup
