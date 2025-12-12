@@ -11,7 +11,8 @@ BUILD_DIR := build
 
 # Source files
 SRCS := $(SRC_DIR)/printf.c \
-        $(SRC_DIR)/writers.c
+        $(SRC_DIR)/writers.c \
+        $(SRC_DIR)/string.c
 
 OBJS := $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 

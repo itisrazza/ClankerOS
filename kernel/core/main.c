@@ -16,6 +16,7 @@
 #include "pmm.h"
 #include "paging.h"
 #include "kheap.h"
+#include "kcmdline.h"
 
 /* VGA text mode buffer */
 #define VGA_MEMORY 0xB8000
@@ -114,6 +115,14 @@ void VidWriteString(const char* data)
  */
 void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
 {
+    // Parse kernel command line arguments
+    KCmdLineInitialize(mbootInfo);
+
+    // Enable early console if requested
+    if (KCmdLineHasFlag("earlycon")) {
+        EConWriterEnable();
+    }
+
     // Initialize early console first for debugging
     EConInitialize();
 
@@ -128,11 +137,17 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     ClcPrintfWriter(vgaWriter, "ClankerOS v0.1.0\n");
     ClcPrintfWriter(vgaWriter, "Booting kernel...\n\n");
 
-    // Serial: Detailed boot information
+    // Serial: Detailed boot information (if earlycon enabled)
     ClcPrintfWriter(serialWriter, "\n=== ClankerOS Boot Log ===\n");
     ClcPrintfWriter(serialWriter, "Multiboot magic: 0x%x\n", magic);
     ClcPrintfWriter(serialWriter, "Multiboot info:  %p\n", mbootInfo);
     ClcPrintfWriter(serialWriter, "Multiboot flags: 0x%x\n", mbootInfo->flags);
+    if (KCmdLineHasFlag("earlycon")) {
+        ClcPrintfWriter(serialWriter, "Early console: enabled\n");
+    }
+    if (KCmdLineHasFlag("boottest")) {
+        ClcPrintfWriter(serialWriter, "Boot tests: enabled\n");
+    }
 
     // Initialize GDT
     ClcPrintfWriter(vgaWriter, "Initializing GDT... ");
@@ -206,106 +221,110 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     ClcPrintfWriter(vgaWriter, "\nWelcome to ClankerOS!\n");
     ClcPrintfWriter(vgaWriter, "Kernel initialized successfully.\n");
 
-    // Test memory allocation
-    ClcPrintfWriter(serialWriter, "\nMemory Allocation Test:\n");
-    ClcPrintfWriter(vgaWriter, "\nRunning memory test... ");
-
-    uintptr_t page1 = PmmAllocPage();
-    uintptr_t page2 = PmmAllocPage();
-    uintptr_t page3 = PmmAllocPage();
-    ClcPrintfWriter(serialWriter, "  Alloc page 1: %p\n", (void*)page1);
-    ClcPrintfWriter(serialWriter, "  Alloc page 2: %p\n", (void*)page2);
-    ClcPrintfWriter(serialWriter, "  Alloc page 3: %p\n", (void*)page3);
-    ClcPrintfWriter(serialWriter, "  Free after alloc: %u KB\n",
-                    (uint32_t)(PmmGetFreeMemory() / 1024));
-
-    PmmFreePage(page2);
-    ClcPrintfWriter(serialWriter, "  Freed page 2\n");
-    ClcPrintfWriter(serialWriter, "  Free after free: %u KB\n",
-                    (uint32_t)(PmmGetFreeMemory() / 1024));
-
-    uintptr_t page4 = PmmAllocPage();
-    ClcPrintfWriter(serialWriter, "  Alloc page 4: %p ", (void*)page4);
-    if (page4 == page2) {
-        ClcPrintfWriter(serialWriter, "(reused freed page - PASS)\n");
-    } else {
-        ClcPrintfWriter(serialWriter, "(did not reuse - unexpected)\n");
-    }
-
-    ClcPrintfWriter(vgaWriter, "PASS\n");
-    ClcPrintfWriter(serialWriter, "Memory test complete!\n");
-
-    // Initialize paging
+    // Initialize paging (always needed)
     ClcPrintfWriter(vgaWriter, "\nInitializing paging... ");
     PagingInitialize();
     ClcPrintfWriter(vgaWriter, "OK\n");
 
-    // Test paging
-    ClcPrintfWriter(serialWriter, "\nPaging Test:\n");
-    ClcPrintfWriter(vgaWriter, "Testing paging... ");
-
-    // Test virtual to physical address translation
-    uintptr_t testVirt = 0x1000;
-    uintptr_t testPhys = PagingGetPhysicalAddress(testVirt);
-    ClcPrintfWriter(serialWriter, "  Virtual %p -> Physical %p ", (void*)testVirt, (void*)testPhys);
-    if (testPhys == testVirt) {
-        ClcPrintfWriter(serialWriter, "(identity mapped - PASS)\n");
-    } else {
-        ClcPrintfWriter(serialWriter, "(FAIL)\n");
-    }
-
-    ClcPrintfWriter(vgaWriter, "PASS\n");
-    ClcPrintfWriter(serialWriter, "Paging test complete!\n");
-
-    // Initialize kernel heap
-    ClcPrintfWriter(vgaWriter, "\nInitializing kernel heap... ");
+    // Initialize kernel heap (always needed)
+    ClcPrintfWriter(vgaWriter, "Initializing kernel heap... ");
     KHeapInitialize();
     ClcPrintfWriter(vgaWriter, "OK\n");
 
-    // Test kernel heap
-    ClcPrintfWriter(serialWriter, "\nKernel Heap Test:\n");
-    ClcPrintfWriter(vgaWriter, "Testing heap allocator... ");
+    // Run boot tests if requested
+    if (KCmdLineHasFlag("boottest")) {
+        // Test memory allocation
+        ClcPrintfWriter(serialWriter, "\nMemory Allocation Test:\n");
+        ClcPrintfWriter(vgaWriter, "\nRunning memory test... ");
 
-    // Test allocation
-    char* str1 = (char*)KAllocateMemory(32);
-    int* nums = (int*)KAllocateMemory(10 * sizeof(int));
-    char* str2 = (char*)KAllocateMemory(64);
+        uintptr_t page1 = PmmAllocPage();
+        uintptr_t page2 = PmmAllocPage();
+        uintptr_t page3 = PmmAllocPage();
+        ClcPrintfWriter(serialWriter, "  Alloc page 1: %p\n", (void*)page1);
+        ClcPrintfWriter(serialWriter, "  Alloc page 2: %p\n", (void*)page2);
+        ClcPrintfWriter(serialWriter, "  Alloc page 3: %p\n", (void*)page3);
+        ClcPrintfWriter(serialWriter, "  Free after alloc: %u KB\n",
+                        (uint32_t)(PmmGetFreeMemory() / 1024));
 
-    ClcPrintfWriter(serialWriter, "  Allocated str1: %p (32 bytes)\n", str1);
-    ClcPrintfWriter(serialWriter, "  Allocated nums: %p (40 bytes)\n", nums);
-    ClcPrintfWriter(serialWriter, "  Allocated str2: %p (64 bytes)\n", str2);
+        PmmFreePage(page2);
+        ClcPrintfWriter(serialWriter, "  Freed page 2\n");
+        ClcPrintfWriter(serialWriter, "  Free after free: %u KB\n",
+                        (uint32_t)(PmmGetFreeMemory() / 1024));
 
-    // Write to allocations
-    if (str1 && nums && str2) {
-        for (int i = 0; i < 10; i++) {
-            nums[i] = i * 10;
+        uintptr_t page4 = PmmAllocPage();
+        ClcPrintfWriter(serialWriter, "  Alloc page 4: %p ", (void*)page4);
+        if (page4 == page2) {
+            ClcPrintfWriter(serialWriter, "(reused freed page - PASS)\n");
+        } else {
+            ClcPrintfWriter(serialWriter, "(did not reuse - unexpected)\n");
         }
-        ClcPrintfWriter(serialWriter, "  nums[5] = %d (expected 50)\n", nums[5]);
 
-        // Test free
-        KFreeMemory(nums);
-        ClcPrintfWriter(serialWriter, "  Freed nums\n");
+        ClcPrintfWriter(vgaWriter, "PASS\n");
+        ClcPrintfWriter(serialWriter, "Memory test complete!\n");
 
-        // Test realloc
-        str1 = (char*)KReallocateMemory(str1, 128);
-        ClcPrintfWriter(serialWriter, "  Reallocated str1: %p (128 bytes)\n", str1);
+        // Test paging
+        ClcPrintfWriter(serialWriter, "\nPaging Test:\n");
+        ClcPrintfWriter(vgaWriter, "Testing paging... ");
 
-        // Get stats
-        size_t total, used, free;
-        KHeapGetStats(&total, &used, &free);
-        ClcPrintfWriter(serialWriter, "  Heap: %u KB total, %u KB used, %u KB free\n",
-                        (uint32_t)(total / 1024),
-                        (uint32_t)(used / 1024),
-                        (uint32_t)(free / 1024));
+        // Test virtual to physical address translation
+        uintptr_t testVirt = 0x1000;
+        uintptr_t testPhys = PagingGetPhysicalAddress(testVirt);
+        ClcPrintfWriter(serialWriter, "  Virtual %p -> Physical %p ", (void*)testVirt, (void*)testPhys);
+        if (testPhys == testVirt) {
+            ClcPrintfWriter(serialWriter, "(identity mapped - PASS)\n");
+        } else {
+            ClcPrintfWriter(serialWriter, "(FAIL)\n");
+        }
 
-        KFreeMemory(str1);
-        KFreeMemory(str2);
+        ClcPrintfWriter(vgaWriter, "PASS\n");
+        ClcPrintfWriter(serialWriter, "Paging test complete!\n");
+
+        // Test kernel heap
+        ClcPrintfWriter(serialWriter, "\nKernel Heap Test:\n");
+        ClcPrintfWriter(vgaWriter, "Testing heap allocator... ");
+
+        // Test allocation
+        char* str1 = (char*)KAllocateMemory(32);
+        int* nums = (int*)KAllocateMemory(10 * sizeof(int));
+        char* str2 = (char*)KAllocateMemory(64);
+
+        ClcPrintfWriter(serialWriter, "  Allocated str1: %p (32 bytes)\n", str1);
+        ClcPrintfWriter(serialWriter, "  Allocated nums: %p (40 bytes)\n", nums);
+        ClcPrintfWriter(serialWriter, "  Allocated str2: %p (64 bytes)\n", str2);
+
+        // Write to allocations
+        if (str1 && nums && str2) {
+            for (int i = 0; i < 10; i++) {
+                nums[i] = i * 10;
+            }
+            ClcPrintfWriter(serialWriter, "  nums[5] = %d (expected 50)\n", nums[5]);
+
+            // Test free
+            KFreeMemory(nums);
+            ClcPrintfWriter(serialWriter, "  Freed nums\n");
+
+            // Test realloc
+            str1 = (char*)KReallocateMemory(str1, 128);
+            ClcPrintfWriter(serialWriter, "  Reallocated str1: %p (128 bytes)\n", str1);
+
+            // Get stats
+            size_t total, used, free;
+            KHeapGetStats(&total, &used, &free);
+            ClcPrintfWriter(serialWriter, "  Heap: %u KB total, %u KB used, %u KB free\n",
+                            (uint32_t)(total / 1024),
+                            (uint32_t)(used / 1024),
+                            (uint32_t)(free / 1024));
+
+            KFreeMemory(str1);
+            KFreeMemory(str2);
+        }
+
+        ClcPrintfWriter(vgaWriter, "PASS\n");
+        ClcPrintfWriter(serialWriter, "Heap test complete!\n");
+
+        ClcPrintfWriter(vgaWriter, "\nAll tests passed!\n");
     }
 
-    ClcPrintfWriter(vgaWriter, "PASS\n");
-    ClcPrintfWriter(serialWriter, "Heap test complete!\n");
-
-    ClcPrintfWriter(vgaWriter, "\nAll tests passed!\n");
     ClcPrintfWriter(serialWriter, "\n=== Boot Complete ===\n");
 
     // Halt - we'll add more functionality later
