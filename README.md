@@ -30,7 +30,7 @@ This project explores several questions:
 
 ## Current Status
 
-**Session 3 Complete** - Hardware Interrupts & Timer
+**Session 4 Complete** - Memory Management
 - ✅ Boots via Multiboot on QEMU
 - ✅ VGA text mode output with formatted printf
 - ✅ GDT/IDT/ISR setup (CPU exception handling)
@@ -38,7 +38,12 @@ This project explores several questions:
 - ✅ PIC (8259) initialization and control
 - ✅ PIT timer running at 100 Hz
 - ✅ Generic printf library (libclankercommon) with writer interface pattern
-- 🔄 Next: Memory management (physical allocator, paging)
+- ✅ Physical memory manager (bitmap allocator)
+- ✅ Virtual memory (paging with identity mapping)
+- ✅ Page fault handler (ISR 14)
+- ✅ Kernel heap allocator (KAllocateMemory/KFreeMemory)
+- ✅ Early console writer (serial debugging output)
+- 🔄 Next: Process management (PCB, scheduler, context switching)
 
 **Resources:**
 - [Session Notes](docs/sessions/) - Detailed development session logs

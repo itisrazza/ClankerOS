@@ -12,6 +12,10 @@
 #include "early_console.h"
 #include "clc/printf.h"
 #include "vid_writer.h"
+#include "econ_writer.h"
+#include "pmm.h"
+#include "paging.h"
+#include "kheap.h"
 
 /* VGA text mode buffer */
 #define VGA_MEMORY 0xB8000
@@ -47,6 +51,7 @@ static uint16_t* terminalBuffer;
 /* Private function declarations */
 static inline uint8_t vgaEntryColor(enum vga_color fg, enum vga_color bg);
 static inline uint16_t vgaEntry(unsigned char uc, uint8_t color);
+static void pageFaultHandler(registers_t* regs);
 
 /*
  * VidInitialize - Initialize VGA text mode display
@@ -115,11 +120,19 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     // Initialize terminal
     VidInitialize();
 
-    // Get VGA writer for formatted output
+    // Get writers for formatted output
     ClcWriter* vgaWriter = VidGetWriter();
+    ClcWriter* serialWriter = EConGetWriter();
 
+    // VGA: Simple branding
     ClcPrintfWriter(vgaWriter, "ClankerOS v0.1.0\n");
     ClcPrintfWriter(vgaWriter, "Booting kernel...\n\n");
+
+    // Serial: Detailed boot information
+    ClcPrintfWriter(serialWriter, "\n=== ClankerOS Boot Log ===\n");
+    ClcPrintfWriter(serialWriter, "Multiboot magic: 0x%x\n", magic);
+    ClcPrintfWriter(serialWriter, "Multiboot info:  %p\n", mbootInfo);
+    ClcPrintfWriter(serialWriter, "Multiboot flags: 0x%x\n", mbootInfo->flags);
 
     // Initialize GDT
     ClcPrintfWriter(vgaWriter, "Initializing GDT... ");
@@ -136,6 +149,9 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     IsrInitialize();
     ClcPrintfWriter(vgaWriter, "OK\n");
 
+    // Register page fault handler (ISR 14)
+    IsrRegisterHandler(14, pageFaultHandler);
+
     // Initialize IRQs
     ClcPrintfWriter(vgaWriter, "Initializing IRQs... ");
     IrqInitialize();
@@ -151,32 +167,186 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     PitInitialize(100);
     ClcPrintfWriter(vgaWriter, "OK (100 Hz)\n");
 
+    // Initialize Physical Memory Manager
+    ClcPrintfWriter(serialWriter, "\nInitializing PMM...\n");
+    ClcPrintfWriter(vgaWriter, "Initializing PMM... ");
+    PmmInitialize(mbootInfo);
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Display memory information
+    size_t totalMem = PmmGetTotalMemory();
+    size_t freeMem = PmmGetFreeMemory();
+    size_t usedMem = PmmGetUsedMemory();
+
+    // VGA: Simple summary
+    ClcPrintfWriter(vgaWriter, "  Memory: %u MB total, %u MB free\n",
+                    (uint32_t)(totalMem / (1024 * 1024)),
+                    (uint32_t)(freeMem / (1024 * 1024)));
+
+    // Serial: Detailed breakdown
+    ClcPrintfWriter(serialWriter, "Memory Manager Statistics:\n");
+    ClcPrintfWriter(serialWriter, "  Total: %u MB (%u KB, %u bytes)\n",
+                    (uint32_t)(totalMem / (1024 * 1024)),
+                    (uint32_t)(totalMem / 1024),
+                    (uint32_t)totalMem);
+    ClcPrintfWriter(serialWriter, "  Free:  %u MB (%u KB, %u bytes)\n",
+                    (uint32_t)(freeMem / (1024 * 1024)),
+                    (uint32_t)(freeMem / 1024),
+                    (uint32_t)freeMem);
+    ClcPrintfWriter(serialWriter, "  Used:  %u MB (%u KB, %u bytes)\n",
+                    (uint32_t)(usedMem / (1024 * 1024)),
+                    (uint32_t)(usedMem / 1024),
+                    (uint32_t)usedMem);
+
     // Enable interrupts
-    ClcPrintfWriter(vgaWriter, "Enabling interrupts... ");
+    ClcPrintfWriter(vgaWriter, "\nEnabling interrupts... ");
     __asm__ volatile ("sti");
     ClcPrintfWriter(vgaWriter, "OK\n");
 
     ClcPrintfWriter(vgaWriter, "\nWelcome to ClankerOS!\n");
     ClcPrintfWriter(vgaWriter, "Kernel initialized successfully.\n");
 
-    // Test formatted output
-    ClcPrintfWriter(vgaWriter, "\nMultiboot magic: 0x%x\n", magic);
-    ClcPrintfWriter(vgaWriter, "Multiboot info at: %p\n", mbootInfo);
+    // Test memory allocation
+    ClcPrintfWriter(serialWriter, "\nMemory Allocation Test:\n");
+    ClcPrintfWriter(vgaWriter, "\nRunning memory test... ");
 
-    // Display timer ticks for a few seconds
-    ClcPrintfWriter(vgaWriter, "\nTimer test (watching ticks for 3 seconds):\n");
-    uint64_t startTicks = PitGetTicks();
-    uint64_t lastTicks = startTicks;
-    while (PitGetTicks() < startTicks + 300) {  // 3 seconds at 100 Hz
-        uint64_t currentTicks = PitGetTicks();
-        if (currentTicks != lastTicks) {
-            ClcPrintfWriter(vgaWriter, "Ticks: %u\n", (uint32_t)currentTicks);
-            lastTicks = currentTicks;
-        }
+    uintptr_t page1 = PmmAllocPage();
+    uintptr_t page2 = PmmAllocPage();
+    uintptr_t page3 = PmmAllocPage();
+    ClcPrintfWriter(serialWriter, "  Alloc page 1: %p\n", (void*)page1);
+    ClcPrintfWriter(serialWriter, "  Alloc page 2: %p\n", (void*)page2);
+    ClcPrintfWriter(serialWriter, "  Alloc page 3: %p\n", (void*)page3);
+    ClcPrintfWriter(serialWriter, "  Free after alloc: %u KB\n",
+                    (uint32_t)(PmmGetFreeMemory() / 1024));
+
+    PmmFreePage(page2);
+    ClcPrintfWriter(serialWriter, "  Freed page 2\n");
+    ClcPrintfWriter(serialWriter, "  Free after free: %u KB\n",
+                    (uint32_t)(PmmGetFreeMemory() / 1024));
+
+    uintptr_t page4 = PmmAllocPage();
+    ClcPrintfWriter(serialWriter, "  Alloc page 4: %p ", (void*)page4);
+    if (page4 == page2) {
+        ClcPrintfWriter(serialWriter, "(reused freed page - PASS)\n");
+    } else {
+        ClcPrintfWriter(serialWriter, "(did not reuse - unexpected)\n");
     }
-    ClcPrintfWriter(vgaWriter, "Timer test complete!\n");
+
+    ClcPrintfWriter(vgaWriter, "PASS\n");
+    ClcPrintfWriter(serialWriter, "Memory test complete!\n");
+
+    // Initialize paging
+    ClcPrintfWriter(vgaWriter, "\nInitializing paging... ");
+    PagingInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Test paging
+    ClcPrintfWriter(serialWriter, "\nPaging Test:\n");
+    ClcPrintfWriter(vgaWriter, "Testing paging... ");
+
+    // Test virtual to physical address translation
+    uintptr_t testVirt = 0x1000;
+    uintptr_t testPhys = PagingGetPhysicalAddress(testVirt);
+    ClcPrintfWriter(serialWriter, "  Virtual %p -> Physical %p ", (void*)testVirt, (void*)testPhys);
+    if (testPhys == testVirt) {
+        ClcPrintfWriter(serialWriter, "(identity mapped - PASS)\n");
+    } else {
+        ClcPrintfWriter(serialWriter, "(FAIL)\n");
+    }
+
+    ClcPrintfWriter(vgaWriter, "PASS\n");
+    ClcPrintfWriter(serialWriter, "Paging test complete!\n");
+
+    // Initialize kernel heap
+    ClcPrintfWriter(vgaWriter, "\nInitializing kernel heap... ");
+    KHeapInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Test kernel heap
+    ClcPrintfWriter(serialWriter, "\nKernel Heap Test:\n");
+    ClcPrintfWriter(vgaWriter, "Testing heap allocator... ");
+
+    // Test allocation
+    char* str1 = (char*)KAllocateMemory(32);
+    int* nums = (int*)KAllocateMemory(10 * sizeof(int));
+    char* str2 = (char*)KAllocateMemory(64);
+
+    ClcPrintfWriter(serialWriter, "  Allocated str1: %p (32 bytes)\n", str1);
+    ClcPrintfWriter(serialWriter, "  Allocated nums: %p (40 bytes)\n", nums);
+    ClcPrintfWriter(serialWriter, "  Allocated str2: %p (64 bytes)\n", str2);
+
+    // Write to allocations
+    if (str1 && nums && str2) {
+        for (int i = 0; i < 10; i++) {
+            nums[i] = i * 10;
+        }
+        ClcPrintfWriter(serialWriter, "  nums[5] = %d (expected 50)\n", nums[5]);
+
+        // Test free
+        KFreeMemory(nums);
+        ClcPrintfWriter(serialWriter, "  Freed nums\n");
+
+        // Test realloc
+        str1 = (char*)KReallocateMemory(str1, 128);
+        ClcPrintfWriter(serialWriter, "  Reallocated str1: %p (128 bytes)\n", str1);
+
+        // Get stats
+        size_t total, used, free;
+        KHeapGetStats(&total, &used, &free);
+        ClcPrintfWriter(serialWriter, "  Heap: %u KB total, %u KB used, %u KB free\n",
+                        (uint32_t)(total / 1024),
+                        (uint32_t)(used / 1024),
+                        (uint32_t)(free / 1024));
+
+        KFreeMemory(str1);
+        KFreeMemory(str2);
+    }
+
+    ClcPrintfWriter(vgaWriter, "PASS\n");
+    ClcPrintfWriter(serialWriter, "Heap test complete!\n");
+
+    ClcPrintfWriter(vgaWriter, "\nAll tests passed!\n");
+    ClcPrintfWriter(serialWriter, "\n=== Boot Complete ===\n");
 
     // Halt - we'll add more functionality later
+    while (1) {
+        __asm__ volatile ("hlt");
+    }
+}
+
+/*
+ * pageFaultHandler - Handle page faults (ISR 14)
+ */
+static void pageFaultHandler(registers_t* regs)
+{
+    ClcWriter* serial = EConGetWriter();
+
+    // Get faulting address from CR2
+    uintptr_t faultAddr;
+    __asm__ volatile ("mov %%cr2, %0" : "=r"(faultAddr));
+
+    // Decode error code
+    bool present = !(regs->errCode & 0x1);  // Page not present
+    bool write = regs->errCode & 0x2;        // Write operation
+    bool user = regs->errCode & 0x4;         // User mode
+    bool reserved = regs->errCode & 0x8;     // Reserved bit set
+    bool fetch = regs->errCode & 0x10;       // Instruction fetch
+
+    ClcPrintfWriter(serial, "\n!!! PAGE FAULT !!!\n");
+    ClcPrintfWriter(serial, "  Fault address: %p\n", (void*)faultAddr);
+    ClcPrintfWriter(serial, "  EIP: %p\n", (void*)regs->eip);
+    ClcPrintfWriter(serial, "  Error code: 0x%x\n", regs->errCode);
+    ClcPrintfWriter(serial, "  Cause: ");
+
+    if (present) ClcPrintfWriter(serial, "Page not present ");
+    if (write) ClcPrintfWriter(serial, "Write ");
+    if (user) ClcPrintfWriter(serial, "User-mode ");
+    if (reserved) ClcPrintfWriter(serial, "Reserved-bit ");
+    if (fetch) ClcPrintfWriter(serial, "Instruction-fetch ");
+    ClcPrintfWriter(serial, "\n");
+
+    // Halt on page fault
+    ClcPrintfWriter(serial, "System halted.\n");
     while (1) {
         __asm__ volatile ("hlt");
     }

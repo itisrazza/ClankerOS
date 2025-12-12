@@ -34,5 +34,5 @@ SECTIONS
     }
 
     /* Kernel end marker */
-    _kernel_end = .;
+    kernelEnd = .;
 }
