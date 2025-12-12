@@ -75,3 +75,8 @@ test_output/
 # Backup files
 *.bak
 *.backup
+
+# Website generated files
+website/chatlogs/*.html
+website/sessions/*.html
+website/api/

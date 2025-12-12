@@ -1,0 +1,27 @@
+# Doxyfile for ClankerOS
+
+PROJECT_NAME           = "ClankerOS"
+PROJECT_BRIEF          = "An experimental operating system built by Claude AI"
+PROJECT_NUMBER         = 0.1
+OUTPUT_DIRECTORY       = website/api
+INPUT                  = kernel/ libraries/
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h *.cpp *.hpp
+EXCLUDE_PATTERNS       = */toolchain/*
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = .
+HTML_COLORSTYLE        = LIGHT
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+HAVE_DOT               = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
