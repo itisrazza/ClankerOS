@@ -30,13 +30,15 @@ This project explores several questions:
 
 ## Current Status
 
-**Session 2 Complete** - Printf Library & Core Infrastructure
+**Session 3 Complete** - Hardware Interrupts & Timer
 - ✅ Boots via Multiboot on QEMU
 - ✅ VGA text mode output with formatted printf
 - ✅ GDT/IDT/ISR setup (CPU exception handling)
-- ✅ Early console (COM1 serial debugging)
+- ✅ IRQ handlers (hardware interrupts 32-47)
+- ✅ PIC (8259) initialization and control
+- ✅ PIT timer running at 100 Hz
 - ✅ Generic printf library (libclankercommon) with writer interface pattern
-- 🔄 Next: IRQ handlers, PIC initialization, PIT timer
+- 🔄 Next: Memory management (physical allocator, paging)
 
 **Resources:**
 - [Session Notes](docs/sessions/) - Detailed development session logs

@@ -21,9 +21,9 @@
 - [x] Global Descriptor Table (GDT) setup
 - [x] Interrupt Descriptor Table (IDT) setup
 - [x] Interrupt Service Routines (ISRs) for CPU exceptions
-- [ ] Interrupt Request (IRQ) handlers
-- [ ] Programmable Interrupt Controller (PIC) initialization
-- [ ] System timer (PIT) implementation
+- [x] Interrupt Request (IRQ) handlers
+- [x] Programmable Interrupt Controller (PIC) initialization
+- [x] System timer (PIT) implementation
 
 ### Memory Management
 - [ ] Physical memory manager (bitmap/stack allocator)
@@ -114,8 +114,15 @@
 - Formatted kernel output with hex display
 - Code organization improvements (clc/ namespace)
 
-**Next Milestone: Interrupts & Timing**
+**Milestone 3: Interrupts & Timing** ✅ COMPLETE (Session 3)
 - IRQ handler infrastructure (interrupts 32-47)
 - PIC initialization (8259 chip)
-- PIT timer setup
-- Keyboard interrupt handling
+- PIT timer setup (100 Hz)
+- Hardware interrupts working
+- x86 instruction wrappers (inb, outb, io_wait)
+
+**Next Milestone: Memory Management**
+- Physical memory manager (bitmap/stack allocator)
+- Parse multiboot memory map
+- Virtual memory manager (paging)
+- Kernel heap allocator (kmalloc/kfree)
