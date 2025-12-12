@@ -17,6 +17,8 @@
 #include "paging.h"
 #include "kheap.h"
 #include "kcmdline.h"
+#include "process.h"
+#include "panic.h"
 
 /* VGA text mode buffer */
 #define VGA_MEMORY 0xB8000
@@ -53,6 +55,9 @@ static uint16_t* terminalBuffer;
 static inline uint8_t vgaEntryColor(enum vga_color fg, enum vga_color bg);
 static inline uint16_t vgaEntry(unsigned char uc, uint8_t color);
 static void pageFaultHandler(registers_t* regs);
+static void testProcess1(void);
+static void testProcess2(void);
+static void testProcess3(void);
 
 /*
  * VidInitialize - Initialize VGA text mode display
@@ -327,7 +332,51 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
 
     ClcPrintfWriter(serialWriter, "\n=== Boot Complete ===\n");
 
-    // Halt - we'll add more functionality later
+    // Test panic system if requested
+    if (KCmdLineHasFlag("testpanic")) {
+        ClcPrintfWriter(vgaWriter, "\nTesting panic system...\n");
+        ClcPrintfWriter(serialWriter, "Panic test requested - triggering KPanic\n");
+        KPanic("Test panic - this is intentional (value: %d)", 42);
+    }
+
+    // Test page fault handler if requested
+    if (KCmdLineHasFlag("testpagefault")) {
+        ClcPrintfWriter(vgaWriter, "\nTesting page fault handler...\n");
+        ClcPrintfWriter(serialWriter, "Page fault test - accessing invalid address\n");
+        volatile uint32_t* badPtr = (uint32_t*)0xDEADBEEF;
+        uint32_t value = *badPtr;  // This will trigger a page fault
+        (void)value;  // Suppress unused warning
+    }
+
+    // Initialize process management
+    ClcPrintfWriter(vgaWriter, "\nInitializing processes... ");
+    ClcPrintfWriter(serialWriter, "\n=== Process Management Initialization ===\n");
+    ProcessInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Create test processes
+    ClcPrintfWriter(vgaWriter, "Creating test processes... ");
+    Process* proc1 = ProcessCreate("test1", testProcess1, PROCESS_MODE_KERNEL);
+    Process* proc2 = ProcessCreate("test2", testProcess2, PROCESS_MODE_KERNEL);
+    Process* proc3 = ProcessCreate("test3", testProcess3, PROCESS_MODE_KERNEL);
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    if (!proc1 || !proc2 || !proc3) {
+        ClcPrintfWriter(vgaWriter, "Failed to create processes!\n");
+        while (1) __asm__ volatile ("hlt");
+    }
+
+    // Register scheduler with timer
+    PitRegisterTickHandler(ProcessSchedule);
+
+    // Enable scheduler
+    ClcPrintfWriter(vgaWriter, "Enabling scheduler...\n");
+    ClcPrintfWriter(serialWriter, "Scheduler enabled - starting multitasking\n");
+    ProcessEnableScheduler();
+
+    ClcPrintfWriter(vgaWriter, "\nMultitasking started!\n\n");
+
+    // Idle loop - this is now PID 0
     while (1) {
         __asm__ volatile ("hlt");
     }
@@ -338,8 +387,6 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
  */
 static void pageFaultHandler(registers_t* regs)
 {
-    ClcWriter* serial = EConGetWriter();
-
     // Get faulting address from CR2
     uintptr_t faultAddr;
     __asm__ volatile ("mov %%cr2, %0" : "=r"(faultAddr));
@@ -351,24 +398,16 @@ static void pageFaultHandler(registers_t* regs)
     bool reserved = regs->errCode & 0x8;     // Reserved bit set
     bool fetch = regs->errCode & 0x10;       // Instruction fetch
 
-    ClcPrintfWriter(serial, "\n!!! PAGE FAULT !!!\n");
-    ClcPrintfWriter(serial, "  Fault address: %p\n", (void*)faultAddr);
-    ClcPrintfWriter(serial, "  EIP: %p\n", (void*)regs->eip);
-    ClcPrintfWriter(serial, "  Error code: 0x%x\n", regs->errCode);
-    ClcPrintfWriter(serial, "  Cause: ");
+    // Build cause string
+    const char* cause = "Unknown";
+    if (present && write) cause = "Write to non-present page";
+    else if (present && !write) cause = "Read from non-present page";
+    else if (write) cause = "Page protection violation (write)";
+    else if (user) cause = "User mode access violation";
+    else if (reserved) cause = "Reserved bit set in page table";
+    else if (fetch) cause = "Instruction fetch from non-executable page";
 
-    if (present) ClcPrintfWriter(serial, "Page not present ");
-    if (write) ClcPrintfWriter(serial, "Write ");
-    if (user) ClcPrintfWriter(serial, "User-mode ");
-    if (reserved) ClcPrintfWriter(serial, "Reserved-bit ");
-    if (fetch) ClcPrintfWriter(serial, "Instruction-fetch ");
-    ClcPrintfWriter(serial, "\n");
-
-    // Halt on page fault
-    ClcPrintfWriter(serial, "System halted.\n");
-    while (1) {
-        __asm__ volatile ("hlt");
-    }
+    KPanicRegs(regs, "Page Fault at 0x%08x - %s", faultAddr, cause);
 }
 
 /* Private function implementations */
@@ -381,4 +420,56 @@ static inline uint8_t vgaEntryColor(enum vga_color fg, enum vga_color bg)
 static inline uint16_t vgaEntry(unsigned char uc, uint8_t color)
 {
     return (uint16_t)uc | (uint16_t)color << 8;
+}
+
+/*
+ * Test processes - demonstrate multitasking
+ */
+
+static void testProcess1(void)
+{
+    ClcWriter* vga = VidGetWriter();
+    ClcWriter* serial = EConGetWriter();
+
+    for (int i = 0; i < 5; i++) {
+        ClcPrintfWriter(vga, "[P1:%d] ", i);
+        ClcPrintfWriter(serial, "Process 1 iteration %d\n", i);
+
+        // Busy wait to simulate work
+        for (volatile int j = 0; j < 1000000; j++);
+    }
+
+    ClcPrintfWriter(serial, "Process 1 exiting\n");
+}
+
+static void testProcess2(void)
+{
+    ClcWriter* vga = VidGetWriter();
+    ClcWriter* serial = EConGetWriter();
+
+    for (int i = 0; i < 5; i++) {
+        ClcPrintfWriter(vga, "[P2:%d] ", i);
+        ClcPrintfWriter(serial, "Process 2 iteration %d\n", i);
+
+        // Busy wait to simulate work
+        for (volatile int j = 0; j < 1000000; j++);
+    }
+
+    ClcPrintfWriter(serial, "Process 2 exiting\n");
+}
+
+static void testProcess3(void)
+{
+    ClcWriter* vga = VidGetWriter();
+    ClcWriter* serial = EConGetWriter();
+
+    for (int i = 0; i < 5; i++) {
+        ClcPrintfWriter(vga, "[P3:%d] ", i);
+        ClcPrintfWriter(serial, "Process 3 iteration %d\n", i);
+
+        // Busy wait to simulate work
+        for (volatile int j = 0; j < 1000000; j++);
+    }
+
+    ClcPrintfWriter(serial, "Process 3 exiting\n");
 }

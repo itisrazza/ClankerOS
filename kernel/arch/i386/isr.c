@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "isr.h"
 #include "idt.h"
+#include "panic.h"
 
 /* ISR handler array */
 static isr_t interruptHandlers[256];
@@ -65,17 +66,14 @@ void isrHandler(registers_t* regs)
         isr_t handler = interruptHandlers[regs->intNo];
         handler(regs);
     } else {
-        // Default handler: print exception info
-        VidWriteString("\n*** CPU Exception: ");
+        // Default handler: panic with exception info
+        const char* exceptionName = "Unknown Interrupt";
         if (regs->intNo < 32) {
-            VidWriteString(exceptionMessages[regs->intNo]);
-        } else {
-            VidWriteString("Unknown");
+            exceptionName = exceptionMessages[regs->intNo];
         }
-        VidWriteString(" ***\n");
 
-        // Halt the system
-        __asm__ volatile("cli; hlt");
+        KPanicRegs(regs, "Unhandled CPU Exception: %s (INT %u)",
+                   exceptionName, regs->intNo);
     }
 }
 

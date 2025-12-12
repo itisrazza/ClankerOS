@@ -3,6 +3,14 @@
 #define PIT_H
 
 #include <stdint.h>
+#include "isr.h"
+
+/*
+ * PitTickHandler - Handler function called on each timer tick
+ *
+ * Receives the CPU register state at the time of the interrupt.
+ */
+typedef void (*PitTickHandler)(registers_t* regs);
 
 /*
  * PitInitialize - Initialize the PIT
@@ -27,5 +35,13 @@ uint64_t PitGetTicks(void);
  * Returns: Timer frequency in Hz
  */
 uint32_t PitGetFrequency(void);
+
+/*
+ * PitRegisterTickHandler - Register a handler to be called on each timer tick
+ *
+ * Parameters:
+ *   handler - Function to call on each tick (receives register state)
+ */
+void PitRegisterTickHandler(PitTickHandler handler);
 
 #endif /* PIT_H */

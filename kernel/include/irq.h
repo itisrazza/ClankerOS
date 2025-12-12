@@ -3,6 +3,7 @@
 #define IRQ_H
 
 #include <stdint.h>
+#include "isr.h"
 
 /* IRQ numbers (mapped to IDT entries 32-47) */
 #define IRQ0  0   /* System timer (PIT) */
@@ -31,6 +32,14 @@
 typedef void (*IrqHandlerFunc)(void);
 
 /*
+ * IrqHandlerRegFunc - IRQ handler function type with register state
+ *
+ * Called when an IRQ occurs with full CPU register state.
+ * Used for handlers that need to modify register state (e.g., scheduler).
+ */
+typedef void (*IrqHandlerRegFunc)(registers_t* regs);
+
+/*
  * IrqInitialize - Initialize IRQ infrastructure
  *
  * Sets up IRQ handlers in the IDT (entries 32-47).
@@ -54,5 +63,14 @@ void IrqRegisterHandler(uint8_t irq, IrqHandlerFunc handler);
  *   irq - IRQ number (0-15)
  */
 void IrqUnregisterHandler(uint8_t irq);
+
+/*
+ * IrqRegisterHandlerWithRegs - Register a handler that receives register state
+ *
+ * Parameters:
+ *   irq - IRQ number (0-15)
+ *   handler - Function to call when IRQ occurs (receives register state)
+ */
+void IrqRegisterHandlerWithRegs(uint8_t irq, IrqHandlerRegFunc handler);
 
 #endif /* IRQ_H */

@@ -14,13 +14,39 @@ Programs can register and serve namespaces using URI-like schemes:
 fs:root:program/hello.exe    - Filesystem access
 proc:123:memory              - Process information
 windows:desktop:main         - Window management
-block:sda1:                  - Block device access
+block:ide:0.0.0              - Block device access (IDE primary master)
 posix:vfs:/bin/hello         - POSIX compatibility layer
 ```
 
 **Aliases** provide convenient shortcuts:
 - `home:/` → user's home directory
 - `root:/` → root filesystem
+
+### Block Device Namespace Design
+
+Block devices use **interface-based sub-namespaces** followed by addressing:
+
+```
+block:<interface>:<address>
+```
+
+**Examples:**
+- `block:floppy:a` - First floppy disk (A: under DOS)
+- `block:floppy:b` - Second floppy disk (B: under DOS)
+- `block:ide:0.0.0` - IDE primary master (first controller, channel 0, device 0)
+- `block:ide:0.0.1` - IDE primary slave
+- `block:ide:0.1.0` - IDE secondary master
+- `block:ide:0.1.1` - IDE secondary slave
+- `block:usb:001.008` - USB mass storage (bus 1, device 8)
+- `block:nvme:0` - First NVMe device
+- `block:nvme:1` - Second NVMe device
+- `block:scsi:0.1.0` - SCSI controller 0, target 1, LUN 0
+
+**Rationale:**
+- Interface-specific addressing reflects hardware topology
+- No Linux-style generic naming (`sda`, `mmcblk`) that obscures device type
+- Clear mapping to physical hardware for debugging
+- Each interface can define its own addressing scheme appropriate to the hardware
 
 ### Kernel-mode vs User-mode Programs
 

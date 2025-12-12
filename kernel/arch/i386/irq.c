@@ -4,10 +4,12 @@
 #include <stdint.h>
 #include "irq.h"
 #include "idt.h"
+#include "isr.h"
 #include "pic.h"
 
 /* IRQ handler table */
 static IrqHandlerFunc irqHandlers[16];
+static IrqHandlerRegFunc irqHandlerRegs[16];
 
 /* External assembly IRQ stubs */
 extern void irq0(void);
@@ -32,9 +34,10 @@ extern void irq15(void);
  */
 void IrqInitialize(void)
 {
-    /* Clear handler table */
+    /* Clear handler tables */
     for (int i = 0; i < 16; i++) {
         irqHandlers[i] = NULL;
+        irqHandlerRegs[i] = NULL;
     }
 
     /* Install IRQ handlers in IDT (interrupts 32-47) */
@@ -77,21 +80,34 @@ void IrqUnregisterHandler(uint8_t irq)
 }
 
 /*
+ * IrqRegisterHandlerWithRegs - Register a handler that receives register state
+ */
+void IrqRegisterHandlerWithRegs(uint8_t irq, IrqHandlerRegFunc handler)
+{
+    if (irq < 16) {
+        irqHandlerRegs[irq] = handler;
+        irqHandlers[irq] = NULL;  /* Clear simple handler if any */
+    }
+}
+
+/*
  * irqHandler - Common C IRQ handler
  *
  * Called from assembly stub. Dispatches to registered handler
  * and sends EOI to PIC.
  */
-void irqHandler(uint32_t intNum, uint32_t errorCode)
+void irqHandler(registers_t* regs)
 {
-    (void)errorCode; /* Unused for IRQs */
-
     /* Convert interrupt number to IRQ number (32-47 -> 0-15) */
-    uint8_t irq = (uint8_t)(intNum - 32);
+    uint8_t irq = (uint8_t)(regs->intNo - 32);
 
-    /* Call registered handler if present */
-    if (irq < 16 && irqHandlers[irq] != NULL) {
-        irqHandlers[irq]();
+    /* Call registered handler (with or without regs) */
+    if (irq < 16) {
+        if (irqHandlerRegs[irq] != NULL) {
+            irqHandlerRegs[irq](regs);
+        } else if (irqHandlers[irq] != NULL) {
+            irqHandlers[irq]();
+        }
     }
 
     /* Send End-Of-Interrupt to PIC */

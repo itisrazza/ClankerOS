@@ -1,8 +1,10 @@
 /* pit.c - Programmable Interval Timer (8253/8254) */
 
 #include <stdint.h>
+#include <stddef.h>
 #include "pit.h"
 #include "irq.h"
+#include "isr.h"
 #include "pic.h"
 #include "x86.h"
 
@@ -18,13 +20,19 @@
 /* Timer state */
 static volatile uint64_t timerTicks = 0;
 static uint32_t timerFrequency = 0;
+static PitTickHandler tickHandler = NULL;
 
 /*
- * pitIrqHandler - Timer interrupt handler
+ * pitIrqHandler - Timer interrupt handler (with register state)
  */
-static void pitIrqHandler(void)
+static void pitIrqHandler(registers_t* regs)
 {
     timerTicks++;
+
+    /* Call registered tick handler if present */
+    if (tickHandler) {
+        tickHandler(regs);
+    }
 }
 
 /*
@@ -58,11 +66,19 @@ void PitInitialize(uint32_t frequency)
     outb(PIT_CHANNEL0, (uint8_t)(divisor & 0xFF));
     outb(PIT_CHANNEL0, (uint8_t)((divisor >> 8) & 0xFF));
 
-    /* Register IRQ handler for IRQ0 (timer) */
-    IrqRegisterHandler(IRQ0, pitIrqHandler);
+    /* Register IRQ handler for IRQ0 (timer) with register state */
+    IrqRegisterHandlerWithRegs(IRQ0, pitIrqHandler);
 
     /* Enable IRQ0 (unmask it in PIC) */
     PicClearMask(IRQ0);
+}
+
+/*
+ * PitRegisterTickHandler - Register a handler to be called on each tick
+ */
+void PitRegisterTickHandler(PitTickHandler handler)
+{
+    tickHandler = handler;
 }
 
 /*

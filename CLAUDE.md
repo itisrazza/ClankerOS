@@ -23,8 +23,8 @@ export PATH="$PWD/toolchain/bin:$PATH"
 make
 
 # Run in QEMU (three options)
-make run              # Basic VGA output
-make run-serial       # Serial output to stdio (debugging)
+make run              # Basic VGA output (for human use)
+make run-serial       # Serial output to stdio (for human debugging)
 make debug            # With GDB server (-s -S)
 
 # Clean build artifacts
@@ -34,6 +34,36 @@ make clean
 make website          # Generate website in website/
 make serve-website    # Serve at http://localhost:8000
 ```
+
+## Running and Testing (for Claude Code)
+
+**IMPORTANT**: When Claude Code runs the kernel for testing, it should **always**:
+
+1. **Use QEMU directly** (not `make run-serial`):
+   ```bash
+   qemu-system-i386 -kernel kernel/clankeros.bin -serial stdio -append "earlycon"
+   ```
+
+2. **Always include the `earlycon` kernel parameter** to enable serial output. Without this, no output will be visible.
+
+3. **Use serial output (`-serial stdio`)** to capture kernel logs and diagnostic information.
+
+4. **Optionally add VGA display** for visual inspection (allows human to see VGA output):
+   ```bash
+   qemu-system-i386 -kernel kernel/clankeros.bin -serial stdio -append "earlycon"
+   # The display window will show VGA output automatically
+   ```
+
+5. **Pass additional kernel parameters** via `-append` as needed:
+   ```bash
+   # Test panic system
+   qemu-system-i386 -kernel kernel/clankeros.bin -serial stdio -append "earlycon testpanic"
+
+   # Test page fault handler
+   qemu-system-i386 -kernel kernel/clankeros.bin -serial stdio -append "earlycon testpagefault"
+   ```
+
+**Why this matters**: The `make run-serial` target is designed for human developers and doesn't include the `earlycon` parameter that enables serial console output. Claude Code needs to see serial output to verify kernel functionality, so it must call QEMU directly with appropriate parameters.
 
 ## Architecture
 

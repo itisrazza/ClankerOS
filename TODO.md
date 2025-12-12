@@ -39,10 +39,10 @@
 - [x] Basic printf/logging infrastructure - libclankercommon with writer interface
 
 ## System Calls & Process Management
-- [ ] System call interface
-- [ ] Process/task structure
-- [ ] Context switching
-- [ ] Basic scheduler (round-robin)
+- [ ] System call interface (int 0x80)
+- [x] Process/task structure (PCB)
+- [x] Context switching
+- [x] Basic scheduler (round-robin)
 - [ ] User mode transition
 - [ ] ELF loader for user programs
 
@@ -129,8 +129,17 @@
 - Kernel heap allocator (KAllocateMemory/KFreeMemory/KReallocateMemory)
 - Early console writer interface (serial output for debugging)
 
-**Next Milestone: Process Management**
-- Process structure (PCB)
-- Context switching
-- Basic scheduler (round-robin)
-- User mode transition
+**Milestone 5: Process Management** ✅ COMPLETE (Session 5)
+- Process Control Block (PCB) with CPU context and state
+- Process creation and initialization
+- Interrupt-based context switching (leverages existing IRQ framework)
+- Round-robin scheduler with ready queue
+- Preemptive multitasking via PIT timer integration
+- Process termination handling
+- Multiple test processes running successfully (kernel mode only for now)
+
+**Next Milestone: User Mode & System Calls**
+- User mode transition (ring 0 to ring 3)
+- System call interface (int 0x80)
+- Privilege level switching
+- User mode test programs

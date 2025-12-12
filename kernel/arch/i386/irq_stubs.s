@@ -35,31 +35,37 @@ IRQ 15, 47
 
 /* Common IRQ stub - saves state and calls C handler */
 irqCommonStub:
-    /* Save all registers */
-    pushl %eax
-    pushl %ecx
-    pushl %edx
-    pushl %ebx
-    pushl %esp
-    pushl %ebp
-    pushl %esi
-    pushl %edi
+    /* Save all registers (pusha order: eax, ecx, edx, ebx, esp, ebp, esi, edi) */
+    pusha
 
-    /* Call C handler */
+    /* Save data segment */
+    mov %ds, %ax
+    push %eax
+
+    /* Load kernel data segment */
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
+
+    /* Call C handler (registers_t* on stack) */
+    push %esp
     call irqHandler
+    add $4, %esp
+
+    /* Restore data segment */
+    pop %eax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
 
     /* Restore registers */
-    popl %edi
-    popl %esi
-    popl %ebp
-    popl %esp
-    popl %ebx
-    popl %edx
-    popl %ecx
-    popl %eax
+    popa
 
     /* Clean up error code and interrupt number */
-    addl $8, %esp
+    add $8, %esp
 
     /* Return from interrupt */
     sti
