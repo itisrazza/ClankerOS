@@ -115,6 +115,18 @@ pre code {
     margin-bottom: 0.5rem;
 }
 
+.message-anchor {
+    color: #ccc;
+    text-decoration: none;
+    margin-right: 0.5rem;
+    font-weight: normal;
+}
+
+.message-anchor:hover {
+    color: #0066cc;
+    text-decoration: none;
+}
+
 .message-timestamp {
     font-size: 0.85rem;
     color: #666;

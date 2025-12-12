@@ -181,6 +181,7 @@ def generate_chatlog_html(session_id, session_name, messages, github_url):
         <div class="chatlog-container">
 '''
 
+    message_counter = 0
     for msg in messages:
         role = msg['role']
         content = msg['content']
@@ -193,11 +194,15 @@ def generate_chatlog_html(session_id, session_name, messages, github_url):
         if not content and not tool_calls and tool_results:
             continue
 
+        message_counter += 1
+        message_id = f'msg-{message_counter}'
+
         role_class = role.replace('_', '-')
         role_display = role.replace('_', ' ').title()
 
-        html += f'                <div class="message {escape(role_class)}">\n'
+        html += f'                <div class="message {escape(role_class)}" id="{message_id}">\n'
         html += f'                    <div class="message-header">\n'
+        html += f'                        <a href="#{message_id}" class="message-anchor">#</a>\n'
         html += f'                        {escape(role_display)}\n'
 
         if timestamp:
