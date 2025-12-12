@@ -6,6 +6,9 @@
 #include "gdt.h"
 #include "idt.h"
 #include "isr.h"
+#include "irq.h"
+#include "pic.h"
+#include "pit.h"
 #include "early_console.h"
 #include "clc/printf.h"
 #include "vid_writer.h"
@@ -70,7 +73,9 @@ void VidPutChar(char c)
 {
     if (c == '\n') {
         terminalColumn = 0;
-        terminalRow++;
+        if (++terminalRow == VGA_HEIGHT) {
+            terminalRow = 0;  // Wrap to top (will scroll later)
+        }
         return;
     }
 
@@ -80,7 +85,7 @@ void VidPutChar(char c)
     if (++terminalColumn == VGA_WIDTH) {
         terminalColumn = 0;
         if (++terminalRow == VGA_HEIGHT) {
-            terminalRow = 0;
+            terminalRow = 0;  // Wrap to top (will scroll later)
         }
     }
 }
@@ -131,18 +136,45 @@ void KMain(uint32_t magic, multiboot_info_t* mbootInfo)
     IsrInitialize();
     ClcPrintfWriter(vgaWriter, "OK\n");
 
-    // TODO: Set up PIC before enabling interrupts
-    // ClcPrintfWriter(vgaWriter, "Enabling interrupts... ");
-    // __asm__ volatile ("sti");
-    // ClcPrintfWriter(vgaWriter, "OK\n");
+    // Initialize IRQs
+    ClcPrintfWriter(vgaWriter, "Initializing IRQs... ");
+    IrqInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Initialize PIC
+    ClcPrintfWriter(vgaWriter, "Initializing PIC... ");
+    PicInitialize();
+    ClcPrintfWriter(vgaWriter, "OK\n");
+
+    // Initialize PIT timer (100 Hz)
+    ClcPrintfWriter(vgaWriter, "Initializing PIT... ");
+    PitInitialize(100);
+    ClcPrintfWriter(vgaWriter, "OK (100 Hz)\n");
+
+    // Enable interrupts
+    ClcPrintfWriter(vgaWriter, "Enabling interrupts... ");
+    __asm__ volatile ("sti");
+    ClcPrintfWriter(vgaWriter, "OK\n");
 
     ClcPrintfWriter(vgaWriter, "\nWelcome to ClankerOS!\n");
     ClcPrintfWriter(vgaWriter, "Kernel initialized successfully.\n");
-    ClcPrintfWriter(vgaWriter, "Interrupts disabled (PIC not yet configured).\n");
 
     // Test formatted output
     ClcPrintfWriter(vgaWriter, "\nMultiboot magic: 0x%x\n", magic);
     ClcPrintfWriter(vgaWriter, "Multiboot info at: %p\n", mbootInfo);
+
+    // Display timer ticks for a few seconds
+    ClcPrintfWriter(vgaWriter, "\nTimer test (watching ticks for 3 seconds):\n");
+    uint64_t startTicks = PitGetTicks();
+    uint64_t lastTicks = startTicks;
+    while (PitGetTicks() < startTicks + 300) {  // 3 seconds at 100 Hz
+        uint64_t currentTicks = PitGetTicks();
+        if (currentTicks != lastTicks) {
+            ClcPrintfWriter(vgaWriter, "Ticks: %u\n", (uint32_t)currentTicks);
+            lastTicks = currentTicks;
+        }
+    }
+    ClcPrintfWriter(vgaWriter, "Timer test complete!\n");
 
     // Halt - we'll add more functionality later
     while (1) {
